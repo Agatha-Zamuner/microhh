@@ -61,5 +61,20 @@ class Particle_bin
         int dim_x=0;
         int dim_y=0;
         std::vector<TF> table;
+        std::vector<TF> TFV_final;
+        std::vector<TF> eta_f;
+        std::vector<TF> eta_c;
+        std::vector<TF> sigma_p;
+        std::vector<TF> m_ps;
+        std::vector<TF> beta_sal;
+        std::vector<TF> w_terminal;
+        std::vector<int> dust_indices;
+        std::vector<TF> particle_size;
+        std::vector<TF> dust_size;
+        std::vector<TF> sand_size;
+	int n_bins=0; 
+	int n_dust=0; 
+	int n_sand=0;
+
 };
 #endif

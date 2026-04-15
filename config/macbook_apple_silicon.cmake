@@ -1,11 +1,11 @@
 # MacBook CMake file for Apple Silicon chips - checked by Mirjam Tijhuis (Wageningen University)
 if(USEMPI) 
-  set(ENV{CC}  mpicc ) # C compiler for parallel build
+  set(ENV{CC} mpicc) # C compiler for parallel build
   set(ENV{CXX} mpicxx) # C++ compiler for parallel build
   set(ENV{FC}  mpif90) # Fortran compiler for parallel build
 else()
-  set(ENV{CC}  clang   ) # C compiler for serial build
-  set(ENV{CXX} clang++ ) # C++ compiler for serial build
+  set(ENV{CC} clang) # C compiler for serial build
+  set(ENV{CXX} clang++) # C++ compiler for serial build
   set(ENV{FC}  gfortran) # Fortran compiler for serial build
 endif()
 
