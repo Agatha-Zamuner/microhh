@@ -50,7 +50,8 @@ class Particle_bin
         Fields<TF>& fields;
 
         bool sw_particle;
-        std::vector<std::string> particle_list;
+       	bool diagnostics_printed = false; 
+	std::vector<std::string> particle_list;
         TF cfl_max;
         unsigned long idt_max;
 
@@ -69,7 +70,8 @@ class Particle_bin
         std::vector<TF> beta_sal;
         std::vector<TF> w_terminal;
         std::vector<int> dust_indices;
-        std::vector<TF> particle_size;
+       	std::vector<int> sand_indices; 
+	std::vector<TF> particle_size;
         std::vector<TF> dust_size;
         std::vector<TF> sand_size;
 	int n_bins=0; 

@@ -86,38 +86,41 @@ namespace
         const TF p_pcrust = 30000.0;
         const TF k = 0.7;
 
-        TF TFV_min = TFV_final[0];
-        for (int b = 1; b < n_bins; ++b)
-            TFV_min = std::min(TFV_min, TFV_final[b]);
+	TF TFV_min = TFV_final[0];
+           for (int b = 1; b < n_bins; ++b)
+           	 TFV_min = std::min(TFV_min, TFV_final[b]);
 
-        for (int j = jstart; j < jend; ++j)
-            for (int i = istart; i < iend; ++i)
-        {
-                const int ij = i + j*jstride;
-                const TF u_star = ustar[ij];
-                const TF U = TF(10) * u_star;
-                const TF gamma_aggregates = std::exp(-k * std::pow(u_star - TFV_min, TF(3)));
+           for (int j = jstart; j < jend; ++j)
+          	for (int i = istart; i < iend; ++i)
+       	   {
+               	   const int ij = i + j*jstride;
+                   const TF u_star = ustar[ij];
+                   const TF U = TF(10) * u_star;
+                   const TF gamma_aggregates = std::exp(-k * std::pow(u_star - TFV_min, TF(3)));
 
-                TF F_dust_bin = TF(0);
+                   TF F_dust_bin = TF(0);
 
-                for (int s = 0; s < n_sand; ++s)
-                {
-                    const int sb = sand_indices[s];
+                   for (int s = 0; s < n_sand; ++s)
+                   {
+                        const int sb = sand_indices[s];
 
-                    TF Q = TF(0);
-                    if (u_star > TFV_final[sb])
-                        Q = c_q * (rho_a/g) * u_star*u_star*u_star * (TF(1) + TFV_final[sb]/u_star)* (TF(1) - (TFV_final[sb]*TFV_final[sb]/(u_star*u_star)));
+                        TF Q = TF(0);
+                        if (u_star > TFV_final[sb])
+                            Q = c_q * (rho_a/g) * u_star*u_star*u_star * (TF(1) + TFV_final[sb]/u_star)* (TF(1) - (TFV_final[sb]*TFV_final[sb]/(u_star*u_star)));
 
-                    const TF omega = (U*U * sand_size[s]/(beta_sal[sb]*beta_sal[sb]))* (TF(0.24) + TF(0.21) * U * std::sqrt(rho_p/p_pcrust));
+                        const TF omega = (U*U * sand_size[s]/(beta_sal[s]*beta_sal[s]))* (TF(0.24) + TF(0.21) * U * std::sqrt(rho_p/p_pcrust));
 
-                    const TF term1 = (TF(1) - gamma_aggregates) + (gamma_aggregates * sigma_p[dust_bin_index]);
-                    const TF term2 = (g * Q) / (u_star*u_star * m_ps[sb]);
-                    const TF term3 = rho_bd * eta_f[dust_bin_index] * omega;
-                    const TF term4 = eta_c[dust_bin_index] * m_ps[sb];
+                    	const TF term1 = (TF(1) - gamma_aggregates) + (gamma_aggregates * sigma_p[dust_bin_index]);
+                   	const TF term2 = (g * Q) / (u_star*u_star * m_ps[s]);
+                    	const TF term3 = rho_bd * eta_f[dust_bin_index] * omega;
+                    	const TF term4 = eta_c[dust_bin_index] * m_ps[s];
 
-                    F_dust_bin += c_y * term1 * term2 * (term3 * term4);
-            }
-                flux_bot[ij] += F_dust_bin;
+			//if (i == istart && j == jstart)
+        		//	std::cout << "d=" << dust_bin_index << " s=" << s << " Q=" << Q << " m_ps=" << m_ps[s] << " term2=" << term2 << " omega=" << omega << "\n";
+			
+                    	F_dust_bin += c_y * term1 * term2 * (term3 * term4);
+              	  }
+                  flux_bot[ij] += F_dust_bin/rho_a;
         }
 
     }
@@ -182,7 +185,6 @@ void Particle_bin<TF>::init(Netcdf_handle& input_nc)
     }
 }
 
-
 template<typename TF>
 void Particle_bin<TF>::create(Timeloop<TF>& timeloop, Netcdf_handle& input_nc)
 {
@@ -192,76 +194,52 @@ void Particle_bin<TF>::create(Timeloop<TF>& timeloop, Netcdf_handle& input_nc)
     auto& gd = grid.get_grid_data();
 
     // Calculate fixed maximum time step.
-    // Find minimum vertical grid spacing.
     TF dz_min = TF(Constants::dbig);
     for (int k=gd.kstart; k<gd.kend; ++k)
-       dz_min = std::min(dz_min, gd.dz[k]);
+        dz_min = std::min(dz_min, gd.dz[k]);
 
-    // Find maximum gravitational settling velocity.
     TF w_max = -TF(Constants::dbig);
     for (auto& w : w_particle)
         w_max = std::max(w_max, std::abs(w.second));
 
-    // Calculate maximum time step.
     const double dt_max = cfl_max / w_max * dz_min;
-
     idt_max = convert_to_itime(dt_max);
 
+    // Declare nc_group here so it's available for everything below
+    Netcdf_handle& nc_group = input_nc.get_group("particle_bin");
 
-    // Allocate and read lookup table from input NetCDF.
-    if (dim_x * dim_y > 0)
-    {
-        table.resize(dim_x*dim_y);
+    TFV_final.resize(n_bins);
+    eta_f.resize(n_dust);
+    eta_c.resize(n_dust);
+    sigma_p.resize(n_dust);
+    m_ps.resize(n_sand);
+    beta_sal.resize(n_sand);
+    w_terminal.resize(n_bins);
+    dust_indices.resize(n_dust);
+    sand_indices.resize(n_sand);
+    particle_size.resize(n_bins);
+    dust_size.resize(n_dust);
+    sand_size.resize(n_sand);
 
-        const std::vector<int> start = {0,0};
-        const std::vector<int> count = {dim_y, dim_x};
+    nc_group.get_variable(TFV_final, "TFV_final", {0}, {n_bins});
+    nc_group.get_variable(eta_f, "eta_f", {0}, {n_dust});
+    nc_group.get_variable(eta_c, "eta_c", {0}, {n_dust});
+    nc_group.get_variable(sigma_p, "sigma_p", {0}, {n_dust});
+    nc_group.get_variable(m_ps, "m_ps", {0}, {n_sand});
+    nc_group.get_variable(beta_sal, "beta_sal", {0}, {n_sand});
+    nc_group.get_variable(w_terminal, "w_terminal", {0}, {n_bins});
+    nc_group.get_variable(dust_indices, "dust_indices", {0}, {n_dust});
+    nc_group.get_variable(sand_indices, "sand_indices", {0}, {n_sand});
+    nc_group.get_variable(particle_size, "particle_size", {0}, {n_bins});
+    nc_group.get_variable(dust_size, "dust_size", {0}, {n_dust});
+    nc_group.get_variable(sand_size, "sand_size", {0}, {n_sand});
 
-        //Netcdf_group& nc_group = input_nc.get_group("particle_bin");
 
-       // if (nc_group.variable_exists("table"))
-       //     nc_group.get_variable(table, "table", start, count);
-        //else
-            throw std::runtime_error("Particle_bin lookup table \"table\" missing in NetCDF input!");
+    for (int s=0; s<n_sand; ++s)
+        master.print_message("sand s=%d, index=%d, TFV_final=%.4f\n",
+            s, sand_indices[s], TFV_final[sand_indices[s]]);
 
-        // Debug...
-        for (int j=0; j<dim_y; j++)
-            for (int i=0; i<dim_x; i++)
-            {
-                const int ij = i + j*dim_x;
-                master.print_message("Table: i=%d, j=%d, value=%f\n", i, j, table[ij]);
-            }
-    }
-    else
-        master.print_warning("Particle_bin lookup table has zero size!\n");
-
-Netcdf_group& nc_group = input_nc.get_group("particle_bin");
-
-TFV_final.resize(n_bins);
-eta_f.resize(n_dust);
-eta_c.resize(n_dust);
-sigma_p.resize(n_dust);
-m_ps.resize(n_sand);
-beta_sal.resize(n_sand);
-w_terminal.resize(n_bins);
-dust_indices.resize(n_dust);
-particle_size.resize(n_bins);
-dust_size.resize(n_dust);
-sand_size.resize(n_sand);
-
-nc_group.get_variable(TFV_final, "TFV_final", {0}, {n_bins});
-nc_group.get_variable(eta_f, "eta_f", {0}, {n_dust});
-nc_group.get_variable(eta_c, "eta_c", {0}, {n_dust});
-nc_group.get_variable(sigma_p, "sigma_p", {0}, {n_dust});
-nc_group.get_variable(m_ps, "m_ps", {0}, {n_sand});
-nc_group.get_variable(beta_sal, "beta_sal", {0}, {n_sand});
-nc_group.get_variable(w_terminal, "w_terminal", {0}, {n_bins});
-nc_group.get_variable(dust_indices, "dust_indices", {0}, {n_dust});
-nc_group.get_variable(particle_size, "particle_size", {0}, {n_bins});
-nc_group.get_variable(dust_size, "dust_size", {0}, {n_dust});
-nc_group.get_variable(sand_size, "sand_size", {0}, {n_sand});
 }
-
-
 
 template<typename TF>
 unsigned long Particle_bin<TF>::get_time_limit()
@@ -297,6 +275,10 @@ void Particle_bin<TF>::exec(Boundary<TF>& boundary, Stats<TF>& stats)
     // Surface emissions.
     const std::vector<TF>& ustar = boundary.get_ustar();
 
+    TF ustar_min = *std::min_element(ustar.begin(), ustar.end());
+    TF ustar_max = *std::max_element(ustar.begin(), ustar.end());
+   // master.print_message("ustar min=%.4f, max=%.4f\n", ustar_min, ustar_max); 
+
     for (int d=0; d<dust_indices.size(); ++d)
     {
         const std::string& scalar = particle_list[dust_indices[d]];
@@ -313,15 +295,26 @@ void Particle_bin<TF>::exec(Boundary<TF>& boundary, Stats<TF>& stats)
                 m_ps.data(),
                 beta_sal.data(),
                 sand_size.data(),
-                dust_indices.data(), 
+                sand_indices.data(), 
                 d,
                 n_sand,
                 n_bins,
                 gd.istart, gd.iend,
                 gd.jstart, gd.jend,
                 gd.icells);
+ 
+        for (int j=gd.jstart; j<gd.jend; ++j)
+        for (int i=gd.istart; i<gd.iend; ++i)
+        {
+            const int ij  = i + j*gd.icells;
+            const int ijk = i + j*gd.icells + gd.kstart*gd.ijcells;
+            fields.st.at(scalar)->fld.data()[ijk] += flux_bot[ij] / gd.dz[gd.kstart];
         }
+        
+    }
 }
+
+
 #endif
 
 #ifdef FLOAT_SINGLE
