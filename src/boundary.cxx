@@ -1159,6 +1159,8 @@ const std::vector<TF>& Boundary<TF>::get_ustar() const
     throw std::runtime_error("Function get_ustar() not implemented in base boundary.");
 }
 
+
+
 template<typename TF>
 std::shared_ptr<Boundary<TF>> Boundary<TF>::factory(
         Master& master, Grid<TF>& grid, Soil_grid<TF>& soil_grid, Fields<TF>& fields, Input& input)

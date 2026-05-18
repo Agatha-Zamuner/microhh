@@ -212,8 +212,8 @@ class Boundary_surface_lsm : public Boundary<TF>
         std::vector<TF> theta_wp;   // Soil moisture content at wilting point (m3 m-3)
         std::vector<TF> theta_fc;   // Soil moisture content at field capacity (m3 m-3)
         std::vector<TF> theta_sat;  // Soil moisture content at saturation (m3 m-3)
-
-        std::vector<TF> gamma_theta_sat;  // Conducticity soil moisture at saturation (m3 m-3)
+	
+	std::vector<TF> gamma_theta_sat;  // Conducticity soil moisture at saturation (m3 m-3)
 
         std::vector<TF> vg_a;  // van Genuchten parameter alpha (m-1)
         std::vector<TF> vg_l;  // van Genuchten parameter l (-)

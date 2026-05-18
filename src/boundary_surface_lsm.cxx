@@ -881,6 +881,7 @@ void Boundary_surface_lsm<TF>::exec(
             sgd.kstart, sgd.kend,
             gd.icells, gd.ijcells);
 
+
     // Calculate root water extraction
     lsmk::scale_tile_with_fraction(
             tmp1->fld_bot.data(),
@@ -994,6 +995,7 @@ void Boundary_surface_lsm<TF>::init_surface_layer(Input& input)
 
     obuk.resize(gd.ijcells);
     ustar.resize(gd.ijcells);
+   	
 
     dudz_mo.resize(gd.ijcells);
     dvdz_mo.resize(gd.ijcells);

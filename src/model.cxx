@@ -144,7 +144,7 @@ Model<TF>::Model(Master& masterin, int argc, char *argv[]) :
         aerosol   = std::make_shared<Aerosol<TF>>(master, *grid, *fields, *input);
         background= std::make_shared<Background<TF>>(master, *grid, *fields, *input);
 
-        particle_bin = std::make_shared<Particle_bin<TF>>(master, *grid, *fields, *input);
+        particle_bin = std::make_shared<Particle_bin<TF>>(master, *grid, *soil_grid, *fields, *input);
 
         ib        = std::make_shared<Immersed_boundary<TF>>(master, *grid, *fields, *input);
 
