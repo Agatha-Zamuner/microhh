@@ -1,45 +1,44 @@
-    /*
-     		    theta_soil.data(),
-    * MicroHH
-    * Copyright (c) 2011-2024 Chiel van Heerwaarden
-    * Copyright (c) 2011-2024 Thijs Heus
-    * Copyright (c) 2014-2024 Bart van Stratum
-    *
-    * This file is part of MicroHH
-    *
-    * MicroHH is free software: you can redistribute it and/or modify
-    * it under the terms of the GNU General Public License as published by
-    * the Free Software Foundation, either version 3 of the License, or
-    * (at your option) any later version.
+/*
+* MicroHH
+* Copyright (c) 2011-2024 Chiel van Heerwaarden
+* Copyright (c) 2011-2024 Thijs Heus
+* Copyright (c) 2014-2024 Bart van Stratum
+*
+* This file is part of MicroHH
+*
+* MicroHH is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
 
-    * MicroHH is distributed in the hope that it will be useful,
-    * but WITHOUT ANY WARRANTY; without even the implied warranty of
-    * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    * GNU General Public License for more details.
+* MicroHH is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
 
-    * You should have received a copy of the GNU General Public License
-    * along with MicroHH.  If not, see <http://www.gnu.org/licenses/>.
-    */
+* You should have received a copy of the GNU General Public License
+* along with MicroHH.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
-    #include <stdexcept>
-    #include <iostream>
+#include <stdexcept>
+#include <iostream>
 
-    #include "master.h"
-    #include "input.h"
-    #include "grid.h"
-    #include "soil_grid.h"
-    #include "fields.h"
-    #include "constants.h"
-    #include "netcdf_interface.h"
-    #include "timeloop.h"
-    #include "constants.h"
-    #include "boundary.h"
-    #include "soil_field3d.h"
-    #include "particle_bin.h"
+#include "master.h"
+#include "input.h"
+#include "grid.h"
+#include "soil_grid.h"
+#include "fields.h"
+#include "constants.h"
+#include "netcdf_interface.h"
+#include "timeloop.h"
+#include "constants.h"
+#include "boundary.h"
+#include "soil_field3d.h"
+#include "particle_bin.h"
 
-    namespace
-    {
-        template<typename TF>
+namespace
+{
+	template<typename TF>
         void settle_particles(
             TF* const restrict st,
             const TF* const restrict s,
@@ -60,7 +59,7 @@
             }
         }
         
-        template<typename TF>
+	template<typename TF>
         void calc_dust_emission(
             TF* const restrict flux_bot,
 	    const TF* const restrict theta_soil_top, 
@@ -91,18 +90,20 @@
             const TF theta_r = 0.02; 
             const TF alpha_w = 33.03; 
             const TF beta_w = 0.71; 
-
+	    const TF SM_correction_factor = 0.1;
 
             for (int j = jstart; j < jend; ++j)
                 for (int i = istart; i < iend; ++i)
-            {
+		{
                     const int ij = i + j*jstride;
                     const TF u_star = ustar[ij];
                     const TF U = TF(10) * u_star;
                    
+		    const TF theta_bias_corrected = theta_soil_top[ij] * SM_correction_factor;	
+	
 	    	    TF f_w; 
 		    if (theta_soil_top[ij] > theta_r)
-			f_w = std::sqrt(TF(1) + alpha_w * std::pow(theta_soil_top[ij] - theta_r, beta_w));
+			f_w = (std::sqrt(TF(1) + alpha_w * std::pow(theta_bias_corrected - theta_r, beta_w)));
 		    else
 			f_w = TF(1);
 
@@ -112,28 +113,31 @@
 
 		    const TF gamma_aggregates = std::exp(-k * std::pow(u_star - TFV_min, TF(3)));
 
+		    if (i == istart && j == jstart)
+                	std::cout << "u_star=" << u_star << " f_w=" << f_w << " TFV_min=" << TFV_min << " gamma=" << gamma_aggregates << "\n";
+
                     TF F_dust_bin = TF(0);
 
                     for (int s = 0; s < n_sand; ++s)
                     {
-                            const int sb = sand_indices[s];
-			    const TF TFV_final = TFV_roughness_corr[sb] * f_w; 
+                        const int sb = sand_indices[s];
+			const TF TFV_final = TFV_roughness_corr[sb] * f_w; 
 
-                            TF Q = TF(0);
-                            if (u_star > TFV_final)
-                                Q = c_q * (rho_a/g) * u_star*u_star*u_star * (TF(1) + TFV_final/u_star)* (TF(1) - (TFV_final *TFV_final/(u_star*u_star)));
+                        TF Q = TF(0);
+                        if (u_star > TFV_final)
+                            Q = c_q * (rho_a/g) * u_star*u_star*u_star * (TF(1) + TFV_final/u_star)* (TF(1) - (TFV_final *TFV_final/(u_star*u_star)));
 
-                            const TF omega = (U*U * sand_size[s]/(beta_sal[s]*beta_sal[s]))* (TF(0.24) + TF(0.21) * U * std::sqrt(rho_p/p_pcrust));
+                        const TF omega = (U*U * sand_size[s]/(beta_sal[s]*beta_sal[s]))* (TF(0.24) + TF(0.21) * U * std::sqrt(rho_p/p_pcrust));
 
-                            const TF term1 = (TF(1) - gamma_aggregates) + (gamma_aggregates * sigma_p[dust_bin_index]);
-                            const TF term2 = (g * Q) / (u_star*u_star * m_ps[s]);
-                            const TF term3 = rho_bd * eta_f[dust_bin_index] * omega;
-                            const TF term4 = eta_c[dust_bin_index] * m_ps[s];
+                        const TF term1 = (TF(1) - gamma_aggregates) + (gamma_aggregates * sigma_p[dust_bin_index]);
+                        const TF term2 = (g * Q) / (u_star*u_star * m_ps[s]);
+                        const TF term3 = rho_bd * eta_f[dust_bin_index] * omega;
+                        const TF term4 = eta_c[dust_bin_index] * m_ps[s];
 
                     //if (i == istart && j == jstart)
                         //std::cout << "d=" << dust_bin_index << "eta_f=" << eta_f[dust_bin_index] << "eta_c=" << eta_c[dust_bin_index] << "\n";
                 
-                    F_dust_bin += c_y * term1 * term2 * (term3 + term4);
+                    	F_dust_bin += c_y * term1 * term2 * (term3 + term4);
 
                // if (i == istart && j == jstart)
                       // std::cout << "d=" << dust_bin_index << "F=" << F_dust_bin << "\n";	
@@ -223,6 +227,10 @@
 
         const double dt_max = cfl_max / w_max * dz_min;
         idt_max = convert_to_itime(dt_max);
+	
+	master.print_message("Available fields.sps keys:\n");
+	    for (auto& kv : fields.sps)
+             master.print_message("  %s\n", kv.first.c_str());
 
         // Declare nc_group here so it's available for everything below
         Netcdf_handle& nc_group = input_nc.get_group("particle_bin");
@@ -269,6 +277,7 @@
         return idt_max;
     }
 
+	
 
     #ifndef USECUDA
     template<typename TF>
@@ -300,8 +309,9 @@
     // master.print_message("ustar min=%.4f, max=%.4f\n", ustar_min, ustar_max); 
 
 	auto& sgd = soil_grid.get_grid_data();
-	const TF* theta_soil_top = fields.sps.at("theta")->fld.data()  + (sgd.kend - 1) * (sgd.ncells/sgd.kcells);
-	
+	const TF* theta_soil_top = fields.sps.at("theta")->fld.data() + (sgd.kend - 1) * (sgd.ncells/sgd.kcells);
+
+			
         for (int d=0; d<dust_indices.size(); ++d)
         {
             const std::string& scalar = particle_list[dust_indices[d]];
@@ -325,20 +335,17 @@
                     n_bins,
                     gd.istart, gd.iend,
                     gd.jstart, gd.jend,
-                    gd.icells);
-    
-     	
-       
+                    gd.icells); 
         }
     }
 
 
-    #endif
+#endif
 
-    #ifdef FLOAT_SINGLE
-    template class Particle_bin<float>;
-    #else
-    template class Particle_bin<double>;
-    #endif
+#ifdef FLOAT_SINGLE
+template class Particle_bin<float>;
+#else
+template class Particle_bin<double>;
+#endif
 
 
