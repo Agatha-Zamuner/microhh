@@ -90,11 +90,11 @@ namespace
             const TF theta_r = 0.02; 
             const TF alpha_w = 33.03; 
             const TF beta_w = 0.71; 
-	    const TF SM_correction_factor = 0.1;
+	        const TF SM_correction_factor = 0.1;
 
             for (int j = jstart; j < jend; ++j)
                 for (int i = istart; i < iend; ++i)
-		{
+		    {
                     const int ij = i + j*jstride;
                     const TF u_star = ustar[ij];
                     const TF U = TF(10) * u_star;
@@ -102,42 +102,45 @@ namespace
 		    const TF theta_bias_corrected = theta_soil_top[ij] * SM_correction_factor;	
 	
 	    	    TF f_w; 
-		    if (theta_soil_top[ij] > theta_r)
+		    if (theta_bias_corrected > theta_r)
 			f_w = (std::sqrt(TF(1) + alpha_w * std::pow(theta_bias_corrected - theta_r, beta_w)));
 		    else
 			f_w = TF(1);
 
 		    TF TFV_min = TFV_roughness_corr[0] * f_w;
 		    for (int b = 1; b < n_bins; ++b)
+		    {	
 			TFV_min = std::min(TFV_min, TFV_roughness_corr[b] * f_w);
+		    }
 
 		    const TF gamma_aggregates = std::exp(-k * std::pow(u_star - TFV_min, TF(3)));
 
-		    if (i == istart && j == jstart)
-                	std::cout << "u_star=" << u_star << " f_w=" << f_w << " TFV_min=" << TFV_min << " gamma=" << gamma_aggregates << "\n";
+		    //if (i == istart && j == jstart)
+                	//std::cout << "u_star=" << u_star << " f_w=" << f_w << " TFV_min=" << TFV_min << " gamma=" << gamma_aggregates << "\n";
 
                     TF F_dust_bin = TF(0);
 
                     for (int s = 0; s < n_sand; ++s)
                     {
                         const int sb = sand_indices[s];
-			const TF TFV_final = TFV_roughness_corr[sb] * f_w; 
+			            const TF TFV_final = TFV_roughness_corr[sb] * f_w; 
 
                         TF Q = TF(0);
                         if (u_star > TFV_final)
                             Q = c_q * (rho_a/g) * u_star*u_star*u_star * (TF(1) + TFV_final/u_star)* (TF(1) - (TFV_final *TFV_final/(u_star*u_star)));
 
-                        const TF omega = (U*U * sand_size[s]/(beta_sal[s]*beta_sal[s]))* (TF(0.24) + TF(0.21) * U * std::sqrt(rho_p/p_pcrust));
+                        const TF sigma_m = TF(12) * u_star*u_star * (rho_bd/p_pcrust) * (TF(1) + TF(14) * u_star * std::sqrt(rho_bd/p_pcrust));
 
-                        const TF term1 = (TF(1) - gamma_aggregates) + (gamma_aggregates * sigma_p[dust_bin_index]);
-                        const TF term2 = (g * Q) / (u_star*u_star * m_ps[s]);
-                        const TF term3 = rho_bd * eta_f[dust_bin_index] * omega;
-                        const TF term4 = eta_c[dust_bin_index] * m_ps[s];
+                        const TF term1 = eta_f[dust_bin_index];
+                        const TF term2 = (TF(1) - gamma_aggregates) + (gamma_aggregates * sigma_p[dust_bin_index]);
+                        const TF term3 = TF(1) + sigma_m; 
+                        const TF term4 = (g * Q) / (u_star*u_star);
 
-                    //if (i == istart && j == jstart)
-                        //std::cout << "d=" << dust_bin_index << "eta_f=" << eta_f[dust_bin_index] << "eta_c=" << eta_c[dust_bin_index] << "\n";
+                      //if (i == istart && j == jstart)
+                        	//std::cout << "Q=" << Q << "\n";
+				//std::cout << "d=" << dust_bin_index << "eta_f=" << eta_f[dust_bin_index] << "eta_c=" << eta_c[dust_bin_index] << "\n";
                 
-                    	F_dust_bin += c_y * term1 * term2 * (term3 + term4);
+                    	F_dust_bin += c_y * term1 * term2 * term3 * term4;
 
                // if (i == istart && j == jstart)
                       // std::cout << "d=" << dust_bin_index << "F=" << F_dust_bin << "\n";	
@@ -347,5 +350,6 @@ template class Particle_bin<float>;
 #else
 template class Particle_bin<double>;
 #endif
+
 
 
